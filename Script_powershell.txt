@@ -1,0 +1,111 @@
+# CONFIG
+$workspaceId = "674ed1eb-c1b4-491b-bab9-39baff368154"
+$sharedKey   = "BofE9Yy0lv2MvyVr037RqFaKZbtJNzCiglBQqzIBRH10yzpomy7auTTzu6BYTkZpFDR3ZbB0I6xSv7GELu0GnA==" # Primary Key
+$logType     = "ServicePrincipalExpiry"
+
+# Authenticate
+Connect-MgGraph -Identity
+
+function Send-LogAnalyticsData {
+    param (
+        [string]$workspaceId,
+        [string]$sharedKey,
+        [string]$body,
+        [string]$logType
+    )
+
+    try {
+        $method = "POST"
+        $contentType = "application/json"
+        $rfc1123date = [DateTime]::UtcNow.ToString("r")
+
+        # ✅ FIX: correct content length
+        $contentLength = ([Text.Encoding]::UTF8.GetBytes($body)).Length
+
+        # ✅ FIX: correct stringToHash
+        $stringToHash = "$method`n$contentLength`n$contentType`nx-ms-date:$rfc1123date`n/api/logs"
+
+        $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash)
+        $keyBytes = [Convert]::FromBase64String($sharedKey)
+
+        $sha256 = New-Object System.Security.Cryptography.HMACSHA256
+        $sha256.Key = $keyBytes
+        $encodedHash = [Convert]::ToBase64String($sha256.ComputeHash($bytesToHash))
+
+        $signature = "SharedKey ${workspaceId}:$encodedHash"
+
+        # ✅ FIX: correct URI
+        $uri = "https://${workspaceId}.ods.opinsights.azure.com/api/logs?api-version=2016-04-01"
+
+        $headers = @{
+            "Authorization"        = $signature
+            "Log-Type"             = $logType
+            "x-ms-date"            = $rfc1123date
+            "TimeGeneratedField"   = "ExpiryDate"
+        }
+
+        Invoke-RestMethod -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body
+
+        Write-Output "Data sent successfully"
+    }
+    catch {
+        Write-Error "Failed to send data: $_"
+    }
+}
+
+# Fetch apps
+$applications = Get-MgApplication -All -Property "id,appId,displayName,passwordCredentials,keyCredentials"
+
+$currentDate = Get-Date
+$result = @()
+
+foreach ($application in $applications) {
+
+    foreach ($passwordCredential in $application.PasswordCredentials) {
+        if ($passwordCredential.EndDateTime) {
+            $result += @{
+                AppName        = $application.DisplayName
+                AppId          = $application.AppId
+                ObjectId       = $application.Id
+                CredentialType = "Secret"
+                ExpiryDate     = $passwordCredential.EndDateTime.ToString("o")
+                DaysToExpire   = ($passwordCredential.EndDateTime - $currentDate).Days
+            }
+        }
+    }
+
+    foreach ($cert in $application.KeyCredentials) {
+        if ($cert.EndDateTime) {
+            $result += @{
+                AppName        = $application.DisplayName
+                AppId          = $application.AppId
+                ObjectId       = $application.Id
+                CredentialType = "Certificate"
+                ExpiryDate     = $cert.EndDateTime.ToString("o")
+                DaysToExpire   = ($cert.EndDateTime - $currentDate).Days
+            }
+        }
+    }
+}
+
+# 🔹 Chunking (safe)
+$chunkSize = 500
+
+if ($result.Count -gt 0) {
+    for ($i = 0; $i -lt $result.Count; $i += $chunkSize) {
+
+        $end = [Math]::Min($i + $chunkSize - 1, $result.Count - 1)
+        $chunk = $result[$i..$end]
+
+        $json = $chunk | ConvertTo-Json -Depth 5
+
+        Send-LogAnalyticsData `
+            -workspaceId $workspaceId `
+            -sharedKey $sharedKey `
+            -body $json `
+            -logType $logType
+    }
+}
+else {
+    Write-Output "No data to send"
+}

@@ -1,0 +1,81 @@
+All this command used to provide the access to system assigned indentity which you enabled on Automation account.
+
+1) az automation account show \
+  --name <AUTOMATION_ACCOUNT_NAME> \
+  --resource-group <RESOURCE_GROUP> \
+  --query identity.principalId \
+  -o tsv
+
+     Save the output like this:  MI_OBJECT_ID=<output>
+
+
+2) az ad sp list --display-name "Microsoft Graph" --query "[0].id" -o tsv
+
+      Save the output like this:  GRAPH_SP_ID=<output>
+
+
+
+3) az ad sp show --id $GRAPH_SP_ID --query "appRoles[?value=='Application.Read.All' && contains(allowedMemberTypes, 'Application')].id" -o tsv
+
+      Save the output like this:  APP_ROLE_ID=<output>
+
+
+
+
+4) az rest --method POST \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$MI_OBJECT_ID/appRoleAssignments" \
+  --headers "Content-Type=application/json" \
+  --body "{
+    \"principalId\": \"$MI_OBJECT_ID\",
+    \"resourceId\": \"$GRAPH_SP_ID\",
+    \"appRoleId\": \"$APP_ROLE_ID\"
+  }"
+
+
+Validation:
+=============
+
+az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$MI_OBJECT_ID/appRoleAssignments"
+
+
+az ad sp show --id 10e4cd3b-e6ab-4438-a62d-e55d164e4c9b \
+  --query "appRoles[?id=='9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30']"
+
+
+========================================================================================================================================================
+
+
+
+
+
+# To Provide the Graph access to Automation account, Once Automation account created execute below commands to get access.
+
+az rest --method PUT \
+  --uri "https://management.azure.com/subscriptions/<Subscription_ID>/resourceGroups/<Resourcegroup_name>/providers/Microsoft.Automation/automationAccounts/serviceprinciple-expiry-notify/modules/Microsoft.Graph.Authentication?api-version=2023-11-01" \
+  --body '{
+    "properties": {
+      "contentLink": {
+        "uri": "https://www.powershellgallery.com/api/v2/package/Microsoft.Graph.Authentication"
+      }
+    }
+  }'
+
+
+az rest --method PUT \
+  --uri "https://management.azure.com/subscriptions/<Subscription_ID>/resourceGroups/<Resourcegroup_name>/providers/Microsoft.Automation/automationAccounts/serviceprinciple-expiry-notify/modules/Microsoft.Graph.Applications?api-version=2023-11-01" \
+  --body '{
+    "properties": {
+      "contentLink": {
+        "uri": "https://www.powershellgallery.com/api/v2/package/Microsoft.Graph.Applications"
+      }
+    }
+  }'
+
+
+# To check the status of above command
+
+az rest --method GET \
+  --uri "https://management.azure.com/subscriptions/<Subscription_ID>/resourceGroups/<Resourcegroup_name>/providers/Microsoft.Automation/automationAccounts/serviceprinciple-expiry-notify/modules/Microsoft.Graph.Authentication?api-version=2023-11-01" \
+  --query "properties.provisioningState"
+
