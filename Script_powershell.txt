@@ -1,6 +1,6 @@
 # CONFIG
-$workspaceId = "674ed1eb-c1b4-491b-bab9-39baff368154"
-$sharedKey   = "BofE9Yy0lv2MvyVr037RqFaKZbtJNzCiglBQqzIBRH10yzpomy7auTTzu6BYTkZpFDR3ZbB0I6xSv7GELu0GnA==" # Primary Key
+$workspaceId = "67eb-c4-4b-ba9-396154"
+$sharedKey   = "BofE9Yy0lv2MvyVr037RqFaKZbtJNR3ZbB0I6xSv7GELu0GnA==" # Primary Key
 $logType     = "ServicePrincipalExpiry"
 
 # Authenticate
