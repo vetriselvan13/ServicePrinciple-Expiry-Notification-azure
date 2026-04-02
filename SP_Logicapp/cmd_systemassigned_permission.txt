@@ -1,0 +1,40 @@
+Below commands used to provide the required permission to managed identity which you enabled in logic apps.
+
+LOGIC_APP_NAME="Logicapp-serviceprinciple-exipry"
+
+
+SP_ID=$(az ad sp list --display-name $LOGIC_APP_NAME --query "[0].id" -o tsv)
+
+
+
+GRAPH_SP_ID=$(az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv)
+
+
+APP_ROLE_ID=$(az ad sp show --id $GRAPH_SP_ID \
+  --query "appRoles[?value=='Application.Read.All' && contains(allowedMemberTypes, 'Application')].id" \
+  -o tsv)
+
+
+
+az rest --method POST \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignments" \
+  --headers "Content-Type=application/json" \
+  --body "{
+    \"principalId\": \"$SP_ID\",
+    \"resourceId\": \"$GRAPH_SP_ID\",
+    \"appRoleId\": \"$APP_ROLE_ID\"
+  }"
+
+
+
+
+
+Validation:
+
+
+az rest --method GET \
+  --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignments"
+
+
+az ad sp show --id 10e4cd3b-e6ab-4438-a62d-e55d164e4c9b \
+  --query "appRoles[?id=='9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30']"
